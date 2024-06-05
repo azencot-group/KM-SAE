@@ -107,7 +107,6 @@ def create_checkpoint_name(args):
                       f'_b_th={args.ball_thresh}' \
                       f'_d_th={args.dynamic_thresh}' \
                       f'_noise={args.noise}' \
-                      f'_tag={args.tag}' \
                       f'.model'
 
     return checkpoint_name
