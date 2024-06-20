@@ -113,7 +113,7 @@ from koopman_utils import swap
 
 """ Given 2 samples in a batch. It Swap their static and dynamic features"""
 indices = [0, 1]
-swap(model, X_dec_te, Z, Ct_te, indices, args.static_size, plot=True)
+swap(model, X_dec_te, Z, Ct_te, indices, args.static_size, plot=True, pick_type=args.static_mode)
 
 # --------------- Performing multi-factor swap --------------- #
 """ Sprites have 4 factors of variation in the static subspace(appearance of the character):
@@ -127,89 +127,74 @@ indices = (2, 12)
 # 1_1 skin
 static_indexes = [32, 33]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='skin-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 1_2 hair (2, 12)
 static_indexes = [38, 39, 35]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='hair-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 1_3 pants (2, 12)
 static_indexes = [28]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='pants-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 1_4 top (2, 12)
 static_indexes = [34, 35, 29, 36]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='top-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 2_1 skin hair (2, 12)
 static_indexes = [38, 39, 35, 32, 33]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='skin_hair-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 2_2 skin pants (2, 12)
 static_indexes = [28, 32, 33]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='skin_pants-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 2_3 skin and top (2, 12)
 static_indexes = [34, 35, 29, 36, 37, 32, 33]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='top_skin-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 2_4 hair and pants (2, 12)
 static_indexes = [39, 38, 35, 28]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='pants_hair-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 2_5 hair and top (2, 12)
 static_indexes = [38, 39, 34, 35, 31, 29]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='hair_top-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 2_6 pants and top (2, 12)
 static_indexes = [34, 35, 36, 28]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='pants_top-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 3_1 pants hair top (2, 12)
 static_indexes = [28, 38, 39, 35, 34]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='pants_hair_top-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 3_2 pants hair skin (2, 12)
 static_indexes = [32, 33, 38, 39, 28]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='pants_hair_skin-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 3_3 pants skin top (2, 12)
 static_indexes = [29, 34, 36, 37, 28, 33, 32, 30, 24]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='pants_skin_top-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # 2_4 skin top hair (2, 12)
 static_indexes = [32, 33, 34, 29, 36, 38, 39, 35]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='skin_top_hair-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
 
 # full
 static_indexes = [33, 32, 37, 36, 39, 38, 35, 34, 31, 28]
 dynamic_indexes = np.delete(np.arange(Ct_te.shape[0]), static_indexes)
-swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True,
-              pick_type='real', prefix='full-')
+swap_by_index(model, X_dec_te2, Z2, Ct_te2, indices, static_indexes, dynamic_indexes, plot=True)
