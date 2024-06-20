@@ -32,7 +32,6 @@ def define_args():
     parser.add_argument('--batch_size', type=int, default=32, metavar='N')
 
     # model
-    parser.add_argument('--arch', type=str, default='KoopmanCNN', choices=['KoopmanCNN'])
     parser.add_argument('--conv_dim', type=int, default=32)
     parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--rnn', type=str, default='both',
@@ -55,14 +54,10 @@ def define_args():
     # thresholds
     parser.add_argument('--ball_thresh', type=float, default=0.6)  # related to 'ball' dynamic mode
     parser.add_argument('--dynamic_thresh', type=float, default=0.5)  # related to 'thresh', 'real'
-    parser.add_argument('--eigs_thresh', type=float, default=.5)  # related to 'norm' static mode loss
+    parser.add_argument('--eigs_thresh', type=float, default=0.5)  # related to 'norm' static mode loss
 
     # other
     parser.add_argument('--noise', type=str, default='none', help='adding blur to the sample (in the pixel space')
-
-    parser.add_argument('--train_classifier', type=bool, default=False)
-    parser.add_argument('--niter', type=int, default=5, help='number of runs for testing')
-    parser.add_argument('--type_gt', type=str, default='action')
 
     return parser
 
