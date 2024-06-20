@@ -19,18 +19,17 @@ def define_args():
     parser.add_argument('--seed', type=int, default=1234)
 
     # data
-    parser.add_argument("--dataset_path", default='./dataset')
+    parser.add_argument("--dataset_path", default='./dataset/')
     parser.add_argument("--dataset", default='Sprites')
     parser.add_argument('--batch_size', type=int, default=32, metavar='N')
 
     # model
-    parser.add_argument('--arch', type=str, default='KoopmanCNN')
     parser.add_argument('--conv_dim', type=int, default=32)
     parser.add_argument('--dropout', type=float, default=0.2)
     parser.add_argument('--rnn', type=str, default='both',
                         help='encoder decoder LSTM strengths. Can be: "none", "encoder","decoder", "both"')
     parser.add_argument('--k_dim', type=int, default=40)
-    parser.add_argument('--hidden_dim', type=int, default=40, help='the hidden dimension of the output decoder lstm')
+    parser.add_argument('--hidden_dim', type=int, default=80, help='the hidden dimension of the output decoder lstm')
     parser.add_argument('--lstm_dec_bi', type=bool, default=False)  # nimrod added
 
     # loss params
@@ -39,15 +38,15 @@ def define_args():
     parser.add_argument('--w_eigs', type=float, default=1.0)
 
     # eigen values system params
-    parser.add_argument('--static_size', type=int, default=8)
-    parser.add_argument('--static_mode', type=str, default='norm', choices=['norm', 'real', 'ball'])
-    parser.add_argument('--dynamic_mode', type=str, default='ball',
+    parser.add_argument('--static_size', type=int, default=7)
+    parser.add_argument('--static_mode', type=str, default='ball', choices=['norm', 'real', 'ball'])
+    parser.add_argument('--dynamic_mode', type=str, default='real',
                         choices=['strict', 'thresh', 'ball', 'real', 'none'])
 
     # thresholds
     parser.add_argument('--ball_thresh', type=float, default=0.6)  # related to 'ball' dynamic mode
     parser.add_argument('--dynamic_thresh', type=float, default=0.5)  # related to 'thresh', 'real'
-    parser.add_argument('--eigs_thresh', type=float, default=.5)  # related to 'norm' static mode loss
+    parser.add_argument('--eigs_thresh', type=float, default=0.5)  # related to 'norm' static mode loss
 
     # other
     parser.add_argument('--noise', type=str, default='none', help='adding blur to the sample (in the pixel space')
