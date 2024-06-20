@@ -42,11 +42,11 @@ def get_sorted_indices(D, pick_type):
 
 def static_dynamic_split(D, I, pick_type, static_size):
     """Return the eigenvalues indexes of the static and dynamic factors"""
-
-    static_size = get_unique_num(D, I, static_size)
     if pick_type == 'ball' or pick_type == 'space_ball':
+        static_size = get_unique_num(D, I[::-1], static_size)
         Is, Id = I[:static_size], I[static_size:]
     else:
+        static_size = get_unique_num(D, I, static_size)
         Id, Is = I[:-static_size], I[-static_size:]
     return Id, Is
 
