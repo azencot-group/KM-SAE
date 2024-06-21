@@ -144,14 +144,6 @@ class KoopmanCNN(nn.Module):
         D, V = np.linalg.eig(C)
         U = np.linalg.inv(V)
 
-        # static/dynamic split
-        if pick_type == 'real':
-            I = np.argsort(np.real(D))
-        elif pick_type == 'norm':
-            I = np.argsort(np.abs(D))
-        else:
-            raise Exception("no such method")
-
         I = get_sorted_indices(D, pick_type)
         Id, Is = static_dynamic_split(D, I, pick_type, self.args.static_size)
 
