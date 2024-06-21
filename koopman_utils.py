@@ -101,7 +101,7 @@ def swap(model, X, Z, C, indices, static_size, plot=False, pick_type='norm'):
 
     # visualize
     if plot:
-        titles = ['S{}'.format(ii1), 'S{}'.format(ii2), 'S{}d{}s'.format(ii2, ii2), 'S{}d{}s'.format(ii2, ii1)]
+        titles = ['S{}'.format(ii1), 'S{}'.format(ii2), 'S{}d{}s'.format(ii1, ii2), 'S{}d{}s'.format(ii2, ii1)]
         imshow_seqeunce([[S1], [S2], [S1d2s.squeeze()], [S2d1s.squeeze()]],
                         plot=plot, titles=np.asarray([titles]).T, figsize=(50, 10), fontsize=50)
 
@@ -151,7 +151,7 @@ def swap_by_index(model, X, Z, C, indices, Sev_idx, Dev_idx, plot=False):
 
     # visualize
     if plot:
-        titles = ['S{}'.format(ii1), 'S{}'.format(ii2), 'S{}d{}s'.format(ii2, ii2), 'S{}d{}s'.format(ii2, ii1),
+        titles = ['S{}'.format(ii1), 'S{}'.format(ii2), 'S{}d{}s'.format(ii1, ii2), 'S{}d{}s'.format(ii2, ii1),
                   'S{}s'.format(ii1), 'S{}s'.format(ii2), 'S{}d'.format(ii1), 'S{}d'.format(ii2)]
         imshow_seqeunce([[S1], [S2], [S1d2s.squeeze()], [S2d1s.squeeze()]],
                         plot=plot, titles=np.asarray([titles[:4]]).T, figsize=(50, 10), fontsize=50)
