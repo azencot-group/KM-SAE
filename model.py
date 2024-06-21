@@ -349,7 +349,7 @@ class encNet(nn.Module):
         )
 
         if args.rnn in ["encoder", "both"]:
-            self.lstm = nn.LSTM(self.k_dim, self.hidden_dim, batch_first=True, bias=True,
+            self.lstm = nn.LSTM(self.k_dim, self.k_dim, batch_first=True, bias=True,
                                 bidirectional=False)
 
     def forward(self, x):
@@ -362,7 +362,7 @@ class encNet(nn.Module):
 
         # lstm
         if self.args.rnn in ["encoder", "both"]:
-            h5 = self.lstm(h5.reshape(-1, self.n_frames, self.k_dim))[0].reshape(-1, self.hidden_dim, 1, 1)
+            h5 = self.lstm(h5.reshape(-1, self.n_frames, self.k_dim))[0].reshape(-1, self.k_dim, 1, 1)
 
         return h5
 
@@ -380,12 +380,14 @@ class decNet(nn.Module):
         self.conv_dim = args.conv_dim
         self.koopman_dim = args.k_dim
         self.lstm_hidden_size = args.hidden_dim
+        self.lstm_dec_bi = args.lstm_dec_bi
 
-        if args.lstm_dec_bi:
-            self.koopman_dim = self.koopman_dim * 2
+        if args.rnn in ["decoder", "both"]:
+            self.lstm = nn.LSTM(self.koopman_dim, self.lstm_hidden_size, batch_first=True, bias=True,
+                                bidirectional=args.lstm_dec_bi)
 
         self.upc1 = nn.Sequential(
-            nn.ConvTranspose2d(self.koopman_dim, self.conv_dim * 8, 4, 1, 0),
+            nn.ConvTranspose2d(self.lstm_hidden_size * (2 if self.lstm_dec_bi else 1), self.conv_dim * 8, 4, 1, 0),
             nn.BatchNorm2d(self.conv_dim * 8),
             nn.LeakyReLU(0.2, inplace=True)
         )
@@ -397,14 +399,10 @@ class decNet(nn.Module):
             nn.Sigmoid()
         )
 
-        if args.rnn in ["decoder", "both"]:
-            self.lstm = nn.LSTM(self.lstm_hidden_size, self.koopman_dim, batch_first=True, bias=True,
-                                bidirectional=args.lstm_dec_bi)
-
     def forward(self, x):
         # lstm
         if self.args.rnn in ["decoder", "both"]:
-            x = self.lstm(x.reshape(-1, self.n_frames, self.lstm_hidden_size))[0].reshape(-1, self.koopman_dim, 1, 1)
+            x = self.lstm(x.reshape(-1, self.n_frames, self.koopman_dim))[0].reshape(-1, self.lstm_hidden_size * (2 if self.lstm_dec_bi else 1), 1, 1)
 
         d1 = self.upc1(x)
         d2 = self.upc2(d1)
