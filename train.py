@@ -1,5 +1,8 @@
 import os, sys
 
+from cdsvae.model import classifier_Sprite_all
+from test_trained_model import check_cls
+
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import torch.utils.data
@@ -38,7 +41,7 @@ def define_args():
     parser.add_argument('--rnn', type=str, default='both',
                         help='encoder decoder LSTM strengths. Can be: "none", "encoder","decoder", "both"')
     parser.add_argument('--k_dim', type=int, default=40)
-    parser.add_argument('--hidden_dim', type=int, default=80, help='the hidden dimension of the output decoder lstm')
+    parser.add_argument('--hidden_dim', type=int, default=40, help='the hidden dimension of the output decoder lstm')
     parser.add_argument('--lstm_dec_bi', type=bool, default=False)  # nimrod added
 
     # loss params
@@ -63,6 +66,13 @@ def define_args():
     parser.add_argument('--train_classifier', type=bool, default=False)
     parser.add_argument('--niter', type=int, default=5, help='number of runs for testing')
     parser.add_argument('--type_gt', type=str, default='action')
+
+    # parameters for the classifier
+    parser.add_argument('--g_dim', default=128, type=int,
+                        help='dimensionality of encoder output vector and decoder input vector')
+    parser.add_argument('--channels', default=3, type=int, help='number of channels in images')
+    parser.add_argument('--rnn_size', default=256, type=int, help='dimensionality of hidden layer')
+    parser.add_argument('--frames', default=8, type=int, help='number of frames, 8 for sprite, 15 for digits and MUGs')
 
     return parser
 
@@ -113,6 +123,10 @@ def create_checkpoint_name(args):
 
 
 def save_checkpoint(epoch, checkpoints):
+    # if is not exists
+    if not os.path.exists(os.path.dirname(checkpoints)):
+        os.makedirs(os.path.dirname(checkpoints))
+
     torch.save({
         'epoch': epoch + 1,
         'state_dict': model.state_dict(),
@@ -171,7 +185,6 @@ def log_losses(epoch, losses_tr, losses_te, names):
 
 
 def train(args):
-
     args.num_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
     args.checkpoint_path = checkpoint_name
 
@@ -194,7 +207,7 @@ def train(args):
 
         model.eval()
         with torch.no_grad():
-            print('Evaulating the model')
+            print('Evaluating the model')
             for i, data in tqdm(enumerate(test_loader, 1)):
                 X = reorder(data['images']).to(args.device)
 
@@ -202,6 +215,10 @@ def train(args):
                 losses = model.loss(X, outputs)
 
                 losses_agg_te = agg_losses(losses_agg_te, losses)
+
+            print('Disentanglement evaluation')
+            check_cls(model, classifier, test_loader, None, 'action')  # freeze dynamics and change static
+            check_cls(model, classifier, test_loader, None, 'aaction')  # freeze static and change dynamics
 
         # log losses
         loss_avg_tr, loss_avg_te = log_losses(epoch, losses_agg_tr, losses_agg_te, model.names)
@@ -256,5 +273,12 @@ if __name__ == '__main__':
     # load the model
     start_epoch, epoch_losses_test = load_checkpoint(model, optimizer, checkpoint_name)
 
+    #  load classifier
+    classifier = classifier_Sprite_all(args)
+    args.resume = 'cdsvae/sprite_judge.tar'
+    loaded_dict = torch.load(args.resume)
+    classifier.load_state_dict(loaded_dict['state_dict'])
+    classifier = classifier.cuda().eval()
+    print('loader classifier from: ', args.resume)
     print("number of model parameters: {}".format(sum(param.numel() for param in model.parameters())))
     train(args)

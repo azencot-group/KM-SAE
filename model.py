@@ -357,7 +357,7 @@ class encNet(nn.Module):
         )
 
         if args.rnn in ["encoder", "both"]:
-            self.lstm = nn.LSTM(self.k_dim, self.hidden_dim, batch_first=True, bias=True,
+            self.lstm = nn.LSTM(self.k_dim, self.k_dim, batch_first=True, bias=True,
                                 bidirectional=False)
 
     def forward(self, x):
