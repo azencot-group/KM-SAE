@@ -156,9 +156,9 @@ def check_cls(cdsvae, classifier, test_loader, run, run_type):
         print('acc: {:.2f}%, kl: {:.4f}, IS: {:.4f}, H_yx: {:.4f}, H_y: {:.4f}'.format(acc * 100, 0, 0, 0, 0))
 
 
-def check_cls_table1(cdsvae, classifier, test_loader, run, run_type, index_mapping):
+def check_cls_specific_indexes(cdsvae, classifier, test_loader, run, run_type, target_indexes, fix=False):
     for epoch in range(1):
-        print("Epoch", epoch)
+        # print("Epoch", epoch)
         cdsvae.eval()
         mean_acc0, mean_acc1, mean_acc2, mean_acc3, mean_acc4 = 0, 0, 0, 0, 0
         mean_acc0_sample, mean_acc1_sample, mean_acc2_sample, mean_acc3_sample, mean_acc4_sample = 0, 0, 0, 0, 0
@@ -168,10 +168,12 @@ def check_cls_table1(cdsvae, classifier, test_loader, run, run_type, index_mappi
             x, label_A, label_D = reorder(data['images']), data['A_label'][:, 0], data['D_label'][:, 0]
             x, label_A, label_D = x.cuda(), label_A.cuda(), label_D.cuda()
 
-            if run_type == "action":
-                recon_x_sample, recon_x = cdsvae.forward_sample_for_classification2_specific_I(x, fix_motion=True)
+            if fix:
+                recon_x_sample, recon_x = cdsvae.forward_sample_for_classification2_specific_I(target_indexes, x,
+                                                                                               fix=True)
             else:
-                recon_x_sample, recon_x = cdsvae.forward_sample_for_classification2_specific_I(x, fix_motion=False)
+                recon_x_sample, recon_x = cdsvae.forward_sample_for_classification2_specific_I(target_indexes, x,
+                                                                                               fix=False)
 
             with torch.no_grad():
                 pred_action1, pred_skin1, pred_pant1, pred_top1, pred_hair1 = classifier(x)
@@ -190,6 +192,9 @@ def check_cls_table1(cdsvae, classifier, test_loader, run, run_type, index_mappi
             pred1_all.append(pred1.detach().cpu().numpy())
             pred2_all.append(pred2.detach().cpu().numpy())
             label_gt.append(np.argmax(label_D.detach().cpu().numpy(), axis=1))
+
+            def count_D(pred, label, mode=1):
+                return (pred // mode) == (label // mode)
 
             # action
             acc0_sample = (np.argmax(pred_action2.detach().cpu().numpy(), axis=1)
@@ -213,17 +218,35 @@ def check_cls_table1(cdsvae, classifier, test_loader, run, run_type, index_mappi
             mean_acc4_sample += acc4_sample
 
         print(
-            'Test sample: action_Acc: {:.2f}% skin_Acc: {:.2f}% pant_Acc: {:.2f}% top_Acc: {:.2f}% hair_Acc: {:.2f}% '.format(
+            'action_Acc: {:.2f}% skin_Acc: {:.2f}% pant_Acc: {:.2f}% top_Acc: {:.2f}% hair_Acc: {:.2f}% '.format(
                 mean_acc0_sample / len(test_loader) * 100,
                 mean_acc1_sample / len(test_loader) * 100, mean_acc2_sample / len(test_loader) * 100,
                 mean_acc3_sample / len(test_loader) * 100, mean_acc4_sample / len(test_loader) * 100))
 
         label2_all = np.hstack(label2_all)
         label_gt = np.hstack(label_gt)
+        pred1_all = np.vstack(pred1_all)
+        pred2_all = np.vstack(pred2_all)
 
         acc = (label_gt == label2_all).mean()
+        # kl = KL_divergence(pred2_all, pred1_all)
 
-        print('acc: {:.2f}%, kl: {:.4f}, IS: {:.4f}, H_yx: {:.4f}, H_y: {:.4f}'.format(acc * 100, 0, 0, 0, 0))
+        nSample_per_cls = min([(label_gt == i).sum() for i in np.unique(label_gt)])
+        index = np.hstack([np.nonzero(label_gt == i)[0][:nSample_per_cls] for i in np.unique(label_gt)]).squeeze()
+        pred2_selected = pred2_all[index]
+
+        # IS = inception_score(pred2_selected)
+        # H_yx = entropy_Hyx(pred2_selected)
+        # H_y = entropy_Hy(pred2_selected)
+
+        # print('acc: {:.2f}%, kl: {:.4f}, IS: {:.4f}, H_yx: {:.4f}, H_y: {:.4f}'.format(acc * 100, 0, 0, 0, 0))
+    action_Acc = mean_acc0_sample / len(test_loader) * 100
+    skin_Acc = mean_acc1_sample / len(test_loader) * 100
+    pant_Acc = mean_acc2_sample / len(test_loader) * 100
+    top_Acc = mean_acc3_sample / len(test_loader) * 100
+    hair_Acc = mean_acc4_sample / len(test_loader) * 100
+
+    return action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc
 
 
 def set_seed_device(seed):

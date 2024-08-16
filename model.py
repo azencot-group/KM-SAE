@@ -304,7 +304,11 @@ class KoopmanCNN(nn.Module):
 
         return X2_dec, X_dec
 
-    def forward_sample_for_classification2_specific_I(self, If, Ic, X, fix_motion, pick_type='real', duplicate=False):
+    def forward_sample_for_classification2_specific_I(self, target_indexes, X, fix=False, pick_type='real',
+                                                      duplicate=False):
+
+        compl_indexes = [i for i in range(40) if i not in target_indexes]
+
         # ----- X.shape: b x t x c x w x h ------
         Z = self.encoder(X)
         Z2, Ct = self.dynamics(Z)
@@ -319,10 +323,6 @@ class KoopmanCNN(nn.Module):
         # eig
         D, V = np.linalg.eig(C)
         U = np.linalg.inv(V)
-
-        # static/dynamic split
-        I = get_sorted_indices(D, pick_type)
-        Id, Is = static_dynamic_split(D, I, pick_type, self.args.static_size)
 
         convex_size = 2
 
@@ -339,15 +339,10 @@ class KoopmanCNN(nn.Module):
 
         Zp2 = copy.deepcopy(Zp)
         # swap static info
-        if fix_motion:
-            if duplicate:
-                Zp2[:, :, Is] = np.repeat(np.expand_dims(np.mean(Zpc[:, :, Is], axis=1), axis=1), 8, axis=1)
-            else:
-                Zp2[:, :, Is] = Zpc[:, :, Is]
-        # swap dynamic info
+        if fix:
+            Zp2[:, :, compl_indexes] = Zpc[:, :, compl_indexes]
         else:
-            Zp2[:, :, Id] = Zpc[:, :, Id]
-
+            Zp2[:, :, target_indexes] = Zpc[:, :, target_indexes]
         Z2 = np.real(Zp2 @ U)
 
         X2_dec = self.decoder(torch.from_numpy(Z2).to(self.args.device))

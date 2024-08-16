@@ -1,4 +1,6 @@
 from typing import List
+
+import pandas as pd
 import torch
 from sklearn.linear_model import LogisticRegression
 from sklearn.tree import DecisionTreeClassifier
@@ -7,10 +9,11 @@ import os, sys
 import argparse
 import torch
 import numpy as np
+from torch.utils.data import DataLoader
 
 from cdsvae.model import classifier_Sprite_all
 from koopman_utils import get_sorted_indices, static_dynamic_split
-from test_trained_model import check_cls_table1
+from test_trained_model import check_cls_specific_indexes
 from utils import load_checkpoint, reorder, t_to_np, load_dataset
 
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -61,6 +64,13 @@ def define_args():
     # other
     parser.add_argument('--noise', type=str, default='none', help='adding blur to the sample (in the pixel space')
 
+    # parameters for the classifier
+    parser.add_argument('--g_dim', default=128, type=int,
+                        help='dimensionality of encoder output vector and decoder input vector')
+    parser.add_argument('--channels', default=3, type=int, help='number of channels in images')
+    parser.add_argument('--rnn_size', default=256, type=int, help='dimensionality of hidden layer')
+    parser.add_argument('--frames', default=8, type=int, help='number of frames, 8 for sprite, 15 for digits and MUGs')
+
     return parser
 
 
@@ -110,7 +120,7 @@ def explore_latent_space_and_return_mapping(latent_codes: List[np.ndarray], attr
         if classifier_type == 'linear':
             classifier = LogisticRegression()
         elif classifier_type == 'decision_tree':
-            classifier = DecisionTreeClassifier(max_depth=2)
+            classifier = DecisionTreeClassifier(max_depth=8)
         else:
             raise ValueError("Unsupported classifier_type. Choose either 'linear' or 'decision_tree'.")
 
@@ -139,7 +149,6 @@ def explore_latent_space_and_return_mapping(latent_codes: List[np.ndarray], attr
     return mapping.tolist()
 
 
-
 if __name__ == "__main__":
     # hyperparameters
     parser = define_args()
@@ -166,15 +175,28 @@ if __name__ == "__main__":
 
     # load data
     train_data, test_data = load_dataset(args)
-    x, label_A, label_D = reorder(torch.tensor(train_data.data)), train_data.A_label[:, 0], train_data.D_label[:, 0]
+    # reduce the size of test data into k samples
+    k = 2000
+    idx = np.random.choice(2664, k, replace=False)
+    test_data.data = test_data.data[idx]
+    test_data.A_label = test_data.A_label[idx]
+    test_data.D_label = test_data.D_label[idx]
+    test_data.N = k
+    test_loader = DataLoader(test_data,
+                             num_workers=4,
+                             batch_size=1024,  # 128
+                             shuffle=False,
+                             drop_last=True,
+                             pin_memory=True)
+    x, label_A, label_D = reorder(torch.tensor(test_data.data)), test_data.A_label[:, 0], test_data.D_label[:, 0]
 
     # # todo - batch the latent codes to produce all of them instead of taking k samples
     # take a random subset of k samples
-    k = 1024
-    idx = np.random.choice(x.shape[0], k, replace=False)
-    x = x[idx]
-    label_A = label_A[idx]
-    label_D = label_D[idx]
+    # k = 2664
+    # idx = np.random.choice(x.shape[0], k, replace=False)
+    # x = x[idx]
+    # label_A = label_A[idx]
+    # label_D = label_D[idx]
 
     x = x.to(args.device)
 
@@ -194,29 +216,65 @@ if __name__ == "__main__":
     ZL = np.real((Z @ V).mean(axis=1))  # create a single latent code scaler for each sample
 
     # transfer label_a and label_d from one hot encoding to a single label
+
+    # --- get the static indices --- #
+    # labels = np.argmax(label_A, axis=-1)
+    I = get_sorted_indices(D, 'ball')
+    # Id, Is = static_dynamic_split(D, I, 'ball', 8)
+    # ZL = ZL[:, Is]
+
+    # transfer label_a and label_d from one hot encoding to a single label
     label_A = np.argmax(label_A, axis=-1)
     label_D = np.argmax(label_D, axis=1)
     # append label_d to label_a
     labels = np.column_stack((label_A, label_D))
-
-    # static/dynamic split
-    I = get_sorted_indices(D, 'ball')
-    Id, Is = static_dynamic_split(D, I, 'ball', 8)
-
-    ZL = ZL[:, Is]
 
     # classifier is 'linear' / 'decision_tree'
     static_mappings = explore_latent_space_and_return_mapping(latent_codes=list(ZL),
                                                               attributes=[list(a) for a in list(labels)],
                                                               classifier_type='decision_tree')
 
+    # a dictionary between an indices and its associated label
+    map_idx_to_label = {}
+    # set the dynamic
+    # for idx in I:
+    #     map_idx_to_label[idx] = 4
+    # set the static
+    for idx, label in enumerate(static_mappings):
+        if label != -1:
+            map_idx_to_label[idx] = label
+
+    map_label_to_idx = {}
+    for idx, label in map_idx_to_label.items():
+        if label not in map_label_to_idx:
+            map_label_to_idx[label] = []
+        map_label_to_idx[label].append(idx)
 
     # ----- load classifier ----- #
     classifier = classifier_Sprite_all(args)
-    args.resume = 'cdsvae/sprite_judge.tar'
+    args.resume = '../cdsvae/sprite_judge.tar'
     loaded_dict = torch.load(args.resume)
     classifier.load_state_dict(loaded_dict['state_dict'])
     classifier = classifier.cuda().eval()
     print('loader classifier from: ', args.resume)
 
-    check_cls_table1(model, classifier, test_loader, None, 'action')
+    print('--- start multifactor classification --- \n')
+    label_to_name_dict = {
+        0: 'skin',
+        1: 'pant',
+        2: 'top',
+        3: 'hair',
+        4: 'action'
+    }
+    df = pd.DataFrame(columns=['action', 'skin', 'pant', 'top', 'hair'],
+                      index=['action', 'skin', 'pant', 'top', 'hair'])
+    for label in map_label_to_idx:
+        print(f"Label {label_to_name_dict[label]}: {map_label_to_idx[label]}")
+        action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc = check_cls_specific_indexes(model, classifier, test_loader,
+                                                                                       None, 'action',
+                                                                                       map_label_to_idx[label],
+                                                                                       fix=True)
+
+        df.loc[label_to_name_dict[label]] = [action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc]
+        # print df
+    print(df)
