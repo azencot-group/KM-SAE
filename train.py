@@ -30,7 +30,8 @@ def define_args():
     parser.add_argument('--seed', type=int, default=1234)
 
     # data
-    parser.add_argument("--dataset_path", default='./dataset/')
+    parser.add_argument("--dataset_path",
+                        default='/cs/cs_groups/azencot_group/datasets/SPRITES_ICML/datasetICML/')  # todo - change back
     parser.add_argument("--dataset", default='Sprites')
     parser.add_argument('--batch_size', type=int, default=32, metavar='N')
 

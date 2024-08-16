@@ -304,6 +304,57 @@ class KoopmanCNN(nn.Module):
 
         return X2_dec, X_dec
 
+    def forward_sample_for_classification2_specific_I(self, If, Ic, X, fix_motion, pick_type='real', duplicate=False):
+        # ----- X.shape: b x t x c x w x h ------
+        Z = self.encoder(X)
+        Z2, Ct = self.dynamics(Z)
+
+        # swap a single pair in batch
+        bsz, fsz = X.shape[0:2]
+
+        # swap contents of samples in indices
+        Z = t_to_np(Z.reshape(bsz, fsz, -1))
+        C = t_to_np(Ct)
+
+        # eig
+        D, V = np.linalg.eig(C)
+        U = np.linalg.inv(V)
+
+        # static/dynamic split
+        I = get_sorted_indices(D, pick_type)
+        Id, Is = static_dynamic_split(D, I, pick_type, self.args.static_size)
+
+        convex_size = 2
+
+        Js = [np.random.permutation(bsz) for _ in range(convex_size)]  # convex_size permutations
+
+        A = np.random.rand(bsz, convex_size)  # bsz x 2
+        A = A / np.sum(A, axis=1)[:, None]
+
+        Zp = Z @ V
+
+        import functools
+        Zpi = [np.array([a * z for a, z in zip(A[:, c], Zp[j])]) for c, j in enumerate(Js)]
+        Zpc = functools.reduce(lambda a, b: a + b, Zpi)
+
+        Zp2 = copy.deepcopy(Zp)
+        # swap static info
+        if fix_motion:
+            if duplicate:
+                Zp2[:, :, Is] = np.repeat(np.expand_dims(np.mean(Zpc[:, :, Is], axis=1), axis=1), 8, axis=1)
+            else:
+                Zp2[:, :, Is] = Zpc[:, :, Is]
+        # swap dynamic info
+        else:
+            Zp2[:, :, Id] = Zpc[:, :, Id]
+
+        Z2 = np.real(Zp2 @ U)
+
+        X2_dec = self.decoder(torch.from_numpy(Z2).to(self.args.device))
+        X_dec = self.decoder(torch.from_numpy(Z).to(self.args.device))
+
+        return X2_dec, X_dec
+
 
 class conv(nn.Module):
     def __init__(self, nin, nout):
