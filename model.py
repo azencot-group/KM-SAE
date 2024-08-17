@@ -350,6 +350,43 @@ class KoopmanCNN(nn.Module):
 
         return X2_dec, X_dec
 
+    def forward_swap_for_classification2_specific_I(self, target_indexes, X, fix=False, pick_type='real',
+                                                    duplicate=False):
+
+        compl_indexes = [i for i in range(40) if i not in target_indexes]
+
+        # ----- X.shape: b x t x c x w x h ------
+        Z = self.encoder(X)
+        Z2, Ct = self.dynamics(Z)
+
+        # swap a single pair in batch
+        bsz, fsz = X.shape[0:2]
+
+        # swap contents of samples in indices
+        Z = t_to_np(Z.reshape(bsz, fsz, -1))
+        C = t_to_np(Ct)
+
+        # eig
+        D, V = np.linalg.eig(C)
+        U = np.linalg.inv(V)
+        Zp = Z @ V
+
+        # shuffle the batch
+        Zpc = np.random.permutation(Zp)
+
+        Zp2 = copy.deepcopy(Zp)
+        # swap static info
+        if fix:
+            Zp2[:, :, compl_indexes] = Zpc[:, :, compl_indexes]
+        else:
+            Zp2[:, :, target_indexes] = Zpc[:, :, target_indexes]
+        Z2 = np.real(Zp2 @ U)
+
+        X2_dec = self.decoder(torch.from_numpy(Z2).to(self.args.device))
+        X_dec = self.decoder(torch.from_numpy(Z).to(self.args.device))
+
+        return X2_dec, X_dec
+
 
 class conv(nn.Module):
     def __init__(self, nin, nout):

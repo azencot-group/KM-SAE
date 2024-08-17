@@ -10,7 +10,8 @@ import argparse
 import torch
 import numpy as np
 from torch.utils.data import DataLoader
-
+from sklearn.cluster import AgglomerativeClustering
+from scipy.stats import pearsonr
 from cdsvae.model import classifier_Sprite_all
 from koopman_utils import get_sorted_indices, static_dynamic_split
 from test_trained_model import check_cls_specific_indexes
@@ -70,6 +71,10 @@ def define_args():
     parser.add_argument('--channels', default=3, type=int, help='number of channels in images')
     parser.add_argument('--rnn_size', default=256, type=int, help='dimensionality of hidden layer')
     parser.add_argument('--frames', default=8, type=int, help='number of frames, 8 for sprite, 15 for digits and MUGs')
+
+    # args for testing
+    parser.add_argument('--exploration_type', type=str, default='supervised', choices=['supervised', 'unsupervised'])
+    parser.add_argument('--classifier_type', type=str, default='decision_tree', choices=['linear', 'decision_tree'])
 
     return parser
 
@@ -149,34 +154,72 @@ def explore_latent_space_and_return_mapping(latent_codes: List[np.ndarray], attr
     return mapping.tolist()
 
 
-if __name__ == "__main__":
-    # hyperparameters
-    parser = define_args()
-    args = parser.parse_args()
+def unsupervised_latent_mapping(latent_codes: List[np.ndarray], group_num=5) -> List[List[int]]:
+    """
+    Given a list of latent codes, the function calculates the correlation between each coordinate in the latent codes,
+    and then groups the coordinates into `group_num` groups based on the correlation between them.
 
+    Args:
+    - latent_codes: A list of latent codes where each latent code is a numpy array.
+    - group_num: The number of groups to cluster the coordinates into.
+
+    Returns:
+    - A list of lists where each sublist contains the indices of the coordinates belonging to the same group.
+    """
+
+    # Convert latent codes to a numpy array
+    latent_codes_np = np.array(latent_codes)
+
+    # Calculate the correlation matrix between the latent code coordinates
+    num_coordinates = latent_codes_np.shape[1]
+    correlation_matrix = np.zeros((num_coordinates, num_coordinates))
+
+    for i in range(num_coordinates):
+        for j in range(num_coordinates):
+            if i == j:
+                correlation_matrix[i, j] = 1.0  # Correlation with itself is 1
+            else:
+                correlation_matrix[i, j] = pearsonr(latent_codes_np[:, i], latent_codes_np[:, j])[0]
+
+    # Convert the correlation matrix to a distance matrix (1 - correlation)
+    distance_matrix = 1 - np.abs(correlation_matrix)
+
+    # Perform hierarchical clustering based on the distance matrix
+    clustering = AgglomerativeClustering(n_clusters=group_num, affinity='precomputed', linkage='average')
+    cluster_labels = clustering.fit_predict(distance_matrix)
+
+    # Group the coordinates based on the clustering labels
+    groups = [[] for _ in range(group_num)]
+    for coord_idx, group_label in enumerate(cluster_labels):
+        groups[group_label].append(coord_idx)
+
+    return groups
+
+
+def load_model():
+    global args
     # data parameters
     args.n_frames = 8
     args.n_channels = 3
     args.n_height = 64
     args.n_width = 64
-
     # set PRNG seed
-    args.device = set_seed_device(args.seed)
-
     # create model
     from model import KoopmanCNN
-
     model = KoopmanCNN(args).to(device=args.device)
-
     # load the model
     checkpoint_name = '../weights/sprites_weights.model'
     load_checkpoint(model, checkpoint_name)
     model.eval()
 
-    # load data
+    return model
+
+
+def load_data_for_explore_and_test():
+    global idx, test_data
     train_data, test_data = load_dataset(args)
     # reduce the size of test data into k samples
-    k = 2000
+    k = 1024
     idx = np.random.choice(2664, k, replace=False)
     test_data.data = test_data.data[idx]
     test_data.A_label = test_data.A_label[idx]
@@ -189,39 +232,7 @@ if __name__ == "__main__":
                              drop_last=True,
                              pin_memory=True)
     x, label_A, label_D = reorder(torch.tensor(test_data.data)), test_data.A_label[:, 0], test_data.D_label[:, 0]
-
-    # # todo - batch the latent codes to produce all of them instead of taking k samples
-    # take a random subset of k samples
-    # k = 2664
-    # idx = np.random.choice(x.shape[0], k, replace=False)
-    # x = x[idx]
-    # label_A = label_A[idx]
-    # label_D = label_D[idx]
-
     x = x.to(args.device)
-
-    # todo - iteratively pass the data in batches and save the outputs
-    outputs = model(x)
-    _, Ct_te, Z = outputs[0], outputs[-1], outputs[2]
-
-    #  --- extract latent codes ---
-    Z = t_to_np(Z.reshape(x.shape[0], 8, 40))  # 8 its the time steps in this dataset and 40 is the latent dimension
-    C = t_to_np(Ct_te)
-
-    # eig
-    D, V = np.linalg.eig(C)
-    U = np.linalg.inv(V)
-
-    # project onto V
-    ZL = np.real((Z @ V).mean(axis=1))  # create a single latent code scaler for each sample
-
-    # transfer label_a and label_d from one hot encoding to a single label
-
-    # --- get the static indices --- #
-    # labels = np.argmax(label_A, axis=-1)
-    I = get_sorted_indices(D, 'ball')
-    # Id, Is = static_dynamic_split(D, I, 'ball', 8)
-    # ZL = ZL[:, Is]
 
     # transfer label_a and label_d from one hot encoding to a single label
     label_A = np.argmax(label_A, axis=-1)
@@ -229,28 +240,73 @@ if __name__ == "__main__":
     # append label_d to label_a
     labels = np.column_stack((label_A, label_D))
 
-    # classifier is 'linear' / 'decision_tree'
-    static_mappings = explore_latent_space_and_return_mapping(latent_codes=list(ZL),
-                                                              attributes=[list(a) for a in list(labels)],
-                                                              classifier_type='decision_tree')
+    return x, labels, test_loader
 
-    # a dictionary between an indices and its associated label
-    map_idx_to_label = {}
-    # set the dynamic
-    # for idx in I:
-    #     map_idx_to_label[idx] = 4
-    # set the static
-    for idx, label in enumerate(static_mappings):
-        if label != -1:
-            map_idx_to_label[idx] = label
 
-    map_label_to_idx = {}
-    for idx, label in map_idx_to_label.items():
-        if label not in map_label_to_idx:
-            map_label_to_idx[label] = []
-        map_label_to_idx[label].append(idx)
+def extract_latent_code():
+    global D, ZL
+    outputs = model(x)
+    _, Ct_te, Z = outputs[0], outputs[-1], outputs[2]
+    Z = t_to_np(Z.reshape(x.shape[0], 8, 40))  # 8 its the time steps in this dataset and 40 is the latent dimension
+    C = t_to_np(Ct_te)
+    # eig
+    D, V = np.linalg.eig(C)
+    U = np.linalg.inv(V)
+    # project onto V
+    ZL = np.real((Z @ V).mean(axis=1))  # create a single latent code scaler for each sample
 
-    # ----- load classifier ----- #
+    return ZL
+
+
+def full_experiments(seed):
+    # todo - repeat the main experiment 5 times and calculate the mean and variance of each table and metric
+    pass
+
+if __name__ == "__main__":
+    # TODO - make this experiment more 5 times with different seeds !!! and calculate the mean and variance
+    # --- load configurations ---
+    parser = define_args()
+    args = parser.parse_args()
+    args.device = set_seed_device(args.seed)
+
+    # --- load here you model ---
+    model = load_model()
+
+    # --- load your data (large batch) and labels here ---
+    x, labels, test_loader = load_data_for_explore_and_test()
+
+    #  --- extract latent codes from you model---
+    ZL = extract_latent_code()
+
+    #  --- Latent exploration !!! ---
+    # todo - maybe add more options or classifiers
+    if args.exploration_type == 'supervised':
+        mappings = explore_latent_space_and_return_mapping(latent_codes=list(ZL),
+                                                           attributes=[list(a) for a in list(labels)],
+                                                           classifier_type=args.classifier_type)
+    else:
+        # todo - if using unsupervised - need to align the table with the labels
+        mappings = unsupervised_latent_mapping(latent_codes=list(ZL), group_num=5)
+
+    if args.exploration_type == 'supervised':
+        map_idx_to_label = {}
+        for idx, label in enumerate(mappings):
+            if label != -1:
+                map_idx_to_label[idx] = label
+
+        map_label_to_idx = {}
+        for idx, label in map_idx_to_label.items():
+            if label not in map_label_to_idx:
+                map_label_to_idx[label] = []
+            map_label_to_idx[label].append(idx)
+
+    else:
+        map_label_to_idx = {}
+        for label, group in enumerate(mappings):
+            map_label_to_idx[label] = group
+
+    # --- load classifier for testing of sprites --- #
+    # todo - this is dataset specific - hard code the dataset details in your dataset script
     classifier = classifier_Sprite_all(args)
     args.resume = '../cdsvae/sprite_judge.tar'
     loaded_dict = torch.load(args.resume)
@@ -268,13 +324,59 @@ if __name__ == "__main__":
     }
     df = pd.DataFrame(columns=['action', 'skin', 'pant', 'top', 'hair'],
                       index=['action', 'skin', 'pant', 'top', 'hair'])
+
+    #  --- Swap generation evaluation !!! ---
     for label in map_label_to_idx:
         print(f"Label {label_to_name_dict[label]}: {map_label_to_idx[label]}")
         action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc = check_cls_specific_indexes(model, classifier, test_loader,
                                                                                        None, 'action',
                                                                                        map_label_to_idx[label],
                                                                                        fix=True)
-
         df.loc[label_to_name_dict[label]] = [action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc]
         # print df
+    # print full table
+    print("generation swap")
     print(df)
+
+    # calculate final score
+    scores = df.values
+    scores_mask = np.zeros_like(scores)
+    random_floor_dict = {'skin': 16.66, 'pant': 16.66, 'top': 16.66, 'hair': 16.66, 'action': 11.11}
+    for k in random_floor_dict.keys():
+        scores_mask[:, df.columns.get_loc(k)] = random_floor_dict[k]
+    # add on scores mask diagonal 100
+    np.fill_diagonal(scores_mask, 100)
+
+    off_diagonal = np.where(~np.eye(scores.shape[0], dtype=bool))
+    off_diag_score = np.abs(scores[off_diagonal] - scores_mask[off_diagonal]).mean()
+    diag_score = np.mean(100 - np.diag(scores))
+    final_score = (off_diag_score + diag_score) / 2
+    print(f"Final score: {final_score}")
+
+    #  --- Swap  evaluation !!! ---
+    for label in map_label_to_idx:
+        print(f"Label {label_to_name_dict[label]}: {map_label_to_idx[label]}")
+        action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc = check_cls_specific_indexes(model, classifier, test_loader,
+                                                                                       None, 'action',
+                                                                                       map_label_to_idx[label],
+                                                                                       fix=True, swap=True)
+        df.loc[label_to_name_dict[label]] = [action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc]
+        # print df
+    # print full table
+    print("swap")
+    print(df)
+
+    # calculate final score
+    scores = df.values
+    scores_mask = np.zeros_like(scores)
+    random_floor_dict = {'skin': 16.66, 'pant': 16.66, 'top': 16.66, 'hair': 16.66, 'action': 11.11}
+    for k in random_floor_dict.keys():
+        scores_mask[:, df.columns.get_loc(k)] = random_floor_dict[k]
+    # add on scores mask diagonal 100
+    np.fill_diagonal(scores_mask, 100)
+
+    off_diagonal = np.where(~np.eye(scores.shape[0], dtype=bool))
+    off_diag_score = np.abs(scores[off_diagonal] - scores_mask[off_diagonal]).mean()
+    diag_score = np.mean(100 - np.diag(scores))
+    final_score = (off_diag_score + diag_score) / 2
+    print(f"Final score: {final_score}")

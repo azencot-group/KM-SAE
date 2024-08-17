@@ -156,7 +156,7 @@ def check_cls(cdsvae, classifier, test_loader, run, run_type):
         print('acc: {:.2f}%, kl: {:.4f}, IS: {:.4f}, H_yx: {:.4f}, H_y: {:.4f}'.format(acc * 100, 0, 0, 0, 0))
 
 
-def check_cls_specific_indexes(cdsvae, classifier, test_loader, run, run_type, target_indexes, fix=False):
+def check_cls_specific_indexes(cdsvae, classifier, test_loader, run, run_type, target_indexes, fix=False, swap=False):
     for epoch in range(1):
         # print("Epoch", epoch)
         cdsvae.eval()
@@ -169,11 +169,19 @@ def check_cls_specific_indexes(cdsvae, classifier, test_loader, run, run_type, t
             x, label_A, label_D = x.cuda(), label_A.cuda(), label_D.cuda()
 
             if fix:
-                recon_x_sample, recon_x = cdsvae.forward_sample_for_classification2_specific_I(target_indexes, x,
-                                                                                               fix=True)
+                if swap:
+                    recon_x_sample, recon_x = cdsvae.forward_swap_for_classification2_specific_I(target_indexes, x,
+                                                                                                   fix=True)
+                else:
+                    recon_x_sample, recon_x = cdsvae.forward_sample_for_classification2_specific_I(target_indexes, x,
+                                                                                                   fix=True)
             else:
-                recon_x_sample, recon_x = cdsvae.forward_sample_for_classification2_specific_I(target_indexes, x,
-                                                                                               fix=False)
+                if swap:
+                    recon_x_sample, recon_x = cdsvae.forward_swap_for_classification2_specific_I(target_indexes, x,
+                                                                                                   fix=False)
+                else:
+                    recon_x_sample, recon_x = cdsvae.forward_sample_for_classification2_specific_I(target_indexes, x,
+                                                                                                   fix=False)
 
             with torch.no_grad():
                 pred_action1, pred_skin1, pred_pant1, pred_top1, pred_hair1 = classifier(x)
