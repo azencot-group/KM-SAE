@@ -219,7 +219,7 @@ def load_data_for_explore_and_test():
     global idx, test_data
     train_data, test_data = load_dataset(args)
     # reduce the size of test data into k samples
-    k = 1024
+    k = 256
     idx = np.random.choice(2664, k, replace=False)
     test_data.data = test_data.data[idx]
     test_data.A_label = test_data.A_label[idx]
@@ -227,7 +227,7 @@ def load_data_for_explore_and_test():
     test_data.N = k
     test_loader = DataLoader(test_data,
                              num_workers=4,
-                             batch_size=1024,  # 128
+                             batch_size=k,  # 128
                              shuffle=False,
                              drop_last=True,
                              pin_memory=True)
@@ -251,9 +251,9 @@ def extract_latent_code():
     C = t_to_np(Ct_te)
     # eig
     D, V = np.linalg.eig(C)
-    U = np.linalg.inv(V)
     # project onto V
     ZL = np.real((Z @ V).mean(axis=1))  # create a single latent code scaler for each sample
+    # todo - instead of mean take each frame as sample and repeat the labels
 
     return ZL
 
@@ -261,6 +261,36 @@ def extract_latent_code():
 def full_experiments(seed):
     # todo - repeat the main experiment 5 times and calculate the mean and variance of each table and metric
     pass
+
+
+def multifactor_swap_eval(label_to_idx, batch):
+    global label, action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc, scores, scores_mask, random_floor_dict, k, off_diagonal, off_diag_score, diag_score, final_score
+    for label in label_to_idx:
+        print(f"Label {label_to_name_dict[label]}: {label_to_idx[label]}")
+        action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc = check_cls_specific_indexes(model, classifier, test_loader,
+                                                                                       None, 'action',
+                                                                                       label_to_idx[label],
+                                                                                       fix=True)
+        df.loc[label_to_name_dict[label]] = [action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc]
+        # print df
+    # print full table
+    print("generation swap")
+    print(df)
+    # calculate final score
+    scores = df.values
+    scores_mask = np.zeros_like(scores)
+    random_floor_dict = {'skin': 16.66, 'pant': 16.66, 'top': 16.66, 'hair': 16.66, 'action': 11.11}
+    for k in random_floor_dict.keys():
+        scores_mask[:, df.columns.get_loc(k)] = random_floor_dict[k]
+    # add on scores mask diagonal 100
+    np.fill_diagonal(scores_mask, 100)
+    off_diagonal = np.where(~np.eye(scores.shape[0], dtype=bool))
+    off_diag_score = np.abs(scores[off_diagonal] - scores_mask[off_diagonal]).mean()
+    diag_score = np.mean(100 - np.diag(scores))
+    final_score = (off_diag_score + diag_score) / 2
+    print(f"Final score: {final_score}")
+    return final_score
+
 
 if __name__ == "__main__":
     # TODO - make this experiment more 5 times with different seeds !!! and calculate the mean and variance
@@ -326,34 +356,9 @@ if __name__ == "__main__":
                       index=['action', 'skin', 'pant', 'top', 'hair'])
 
     #  --- Swap generation evaluation !!! ---
-    for label in map_label_to_idx:
-        print(f"Label {label_to_name_dict[label]}: {map_label_to_idx[label]}")
-        action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc = check_cls_specific_indexes(model, classifier, test_loader,
-                                                                                       None, 'action',
-                                                                                       map_label_to_idx[label],
-                                                                                       fix=True)
-        df.loc[label_to_name_dict[label]] = [action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc]
-        # print df
-    # print full table
-    print("generation swap")
-    print(df)
+    multifactor_swap_eval()
 
-    # calculate final score
-    scores = df.values
-    scores_mask = np.zeros_like(scores)
-    random_floor_dict = {'skin': 16.66, 'pant': 16.66, 'top': 16.66, 'hair': 16.66, 'action': 11.11}
-    for k in random_floor_dict.keys():
-        scores_mask[:, df.columns.get_loc(k)] = random_floor_dict[k]
-    # add on scores mask diagonal 100
-    np.fill_diagonal(scores_mask, 100)
-
-    off_diagonal = np.where(~np.eye(scores.shape[0], dtype=bool))
-    off_diag_score = np.abs(scores[off_diagonal] - scores_mask[off_diagonal]).mean()
-    diag_score = np.mean(100 - np.diag(scores))
-    final_score = (off_diag_score + diag_score) / 2
-    print(f"Final score: {final_score}")
-
-    #  --- Swap  evaluation !!! ---
+    #  --- Generation  evaluation !!! ---
     for label in map_label_to_idx:
         print(f"Label {label_to_name_dict[label]}: {map_label_to_idx[label]}")
         action_Acc, skin_Acc, pant_Acc, top_Acc, hair_Acc = check_cls_specific_indexes(model, classifier, test_loader,
